@@ -1,0 +1,87 @@
+import socket
+import requests
+import subprocess
+import os
+
+class SimpleVulnerabilityScanner:
+    def __init__(self, target):
+        self.target = target
+
+    def scan_open_ports(self):
+        open_ports = []
+        common_ports = [21, 22, 23, 25, 80, 110, 143, 443, 445, 3389]
+
+        for port in common_ports:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex((self.target, port))
+            if result == 0:
+                open_ports.append(port)
+            sock.close()
+
+        return open_ports
+
+    def check_outdated_software(self):
+        outdated_software = {}
+
+        if os.name == 'posix':
+            try:
+                result = subprocess.run(['apt', 'list', '--upgradable'], capture_output=True, text=True)
+                packages = result.stdout.splitlines()
+                for package in packages:
+                    if 'upgradable' in package:
+                        pkg_name = package.split('/')[0]
+                        outdated_software[pkg_name] = package
+            except Exception as e:
+                return str(e)
+        else:
+            return "OS-specific outdated software check not implemented."
+
+        return outdated_software
+
+    def scan_web_vulnerabilities(self):
+        
+        vulnerabilities = []
+
+        try:
+            response = requests.get(f'http://{self.target}', timeout=5)
+            
+            # Check for missing security headers
+            if 'X-Frame-Options' not in response.headers:
+                vulnerabilities.append("Missing X-Frame-Options header")
+            if 'X-XSS-Protection' not in response.headers:
+                vulnerabilities.append("Missing X-XSS-Protection header")
+            if 'Content-Security-Policy' not in response.headers:
+                vulnerabilities.append("Missing Content-Security-Policy header")
+
+            # Check for outdated server software
+            server_header = response.headers.get('Server')
+            if server_header:
+                vulnerabilities.append(f"Server header present: {server_header}")
+        except requests.exceptions.RequestException as e:
+            return str(e)
+
+        return vulnerabilities
+
+    def scan(self):
+        
+        report = {}
+
+        print("Scanning open ports...")
+        report['Open Ports'] = self.scan_open_ports()
+
+        print("Checking for outdated software...")
+        report['Outdated Software'] = self.check_outdated_software()
+
+        print("Scanning for web vulnerabilities...")
+        report['Web Vulnerabilities'] = self.scan_web_vulnerabilities()
+
+        return report
+
+# Example Usage
+target = 'example.com' 
+scanner = SimpleVulnerabilityScanner(target)
+scan_report = scanner.scan()
+
+for key, value in scan_report.items():
+    print(f"{key}: {value}")
